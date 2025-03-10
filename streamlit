@@ -1,0 +1,65 @@
+import requests
+import openai
+import pandas as pd
+import streamlit as st
+
+# Configurações da API do Pipedrive
+PIPEDRIVE_API_KEY = "SUA_CHAVE_API"
+PIPEDRIVE_URL = "https://api.pipedrive.com/v1"
+
+def get_pipedrive_data():
+    """Extrai dados de negócios fechados no Pipedrive."""
+    url = f"{PIPEDRIVE_URL}/deals?status=won&api_token={PIPEDRIVE_API_KEY}"
+    response = requests.get(url)
+    if response.status_code == 200:
+        return response.json().get("data", [])
+    else:
+        st.error("Erro ao acessar a API do Pipedrive")
+        return []
+
+
+def process_data(deals):
+    """Processa os dados extraídos e retorna um DataFrame."""
+    data = []
+    for deal in deals:
+        data.append({
+            "Vendedor": deal["user_id"]["name"],
+            "Valor": deal["value"],
+            "Data Fechamento": deal["close_time"]
+        })
+    df = pd.DataFrame(data)
+    return df
+
+
+def generate_insights(df):
+    """Gera insights sobre performance dos vendedores usando OpenAI GPT."""
+    prompt = f"""
+    Analise a seguinte tabela de vendas e forneça insights sobre a performance da equipe:
+    {df.to_string()}
+    """
+    response = openai.ChatCompletion.create(
+        model="gpt-4",
+        messages=[{"role": "system", "content": "Você é um analista de vendas."},
+                  {"role": "user", "content": prompt}]
+    )
+    return response["choices"][0]["message"]["content"]
+
+
+def main():
+    st.title("Dashboard de Performance de Vendas - Pipedrive")
+    
+    st.write("Extraindo dados...")
+    deals = get_pipedrive_data()
+    if deals:
+        df = process_data(deals)
+        st.write("### Dados de Vendas")
+        st.dataframe(df)
+        
+        st.write("### Insights Gerados")
+        insights = generate_insights(df)
+        st.write(insights)
+    else:
+        st.warning("Nenhum dado encontrado.")
+
+if __name__ == "__main__":
+    main()
